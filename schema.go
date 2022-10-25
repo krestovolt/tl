@@ -10,9 +10,10 @@ import (
 
 // SchemaDefinition is annotated Definition with Category.
 type SchemaDefinition struct {
-	Annotations []Annotation `json:"annotations,omitempty"` // annotations (comments)
-	Definition  Definition   `json:"definition"`            // definition
-	Category    Category     `json:"category"`              // category of definition (function or type)
+	Scope       ScopeTypeEnum `json:"scope,omitempty"`       // scope (comments)
+	Annotations []Annotation  `json:"annotations,omitempty"` // annotations (comments)
+	Definition  Definition    `json:"definition"`            // definition
+	Category    Category      `json:"category"`              // category of definition (function or type)
 }
 
 // Class describes a non-bare Type with one or more constructors.
@@ -98,9 +99,10 @@ func Parse(reader io.Reader) (*Schema, error) {
 		def  SchemaDefinition
 		line int
 
-		category = CategoryType
-		schema   = &Schema{}
-		scanner  = bufio.NewScanner(reader)
+		category    = CategoryType
+		schema      = &Schema{}
+		scanner     = bufio.NewScanner(reader)
+		activeScope = ScopeEmpty
 	)
 	for scanner.Scan() {
 		line++
@@ -119,6 +121,12 @@ func Parse(reader io.Reader) (*Schema, error) {
 			continue
 		case vectorDefinition, vectorDefinitionWithID:
 			// Special case for vector.
+			continue
+		}
+		if scope, ok := ParseScope(s); ok {
+			// The activeScope will be always caried over the next loop
+			// unless there is scope terminator "Scope End" (as defined by `tokScopeEnd`)
+			activeScope = scope
 			continue
 		}
 		if strings.HasPrefix(s, tokLayer) {
@@ -189,6 +197,7 @@ func Parse(reader io.Reader) (*Schema, error) {
 			}
 		}
 
+		def.Scope = activeScope
 		schema.Definitions = append(schema.Definitions, def)
 		def = SchemaDefinition{} // reset definition
 	}
